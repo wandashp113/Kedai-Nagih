@@ -4,7 +4,7 @@ import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { initDb, getMenus, getMenu, createMenu, updateMenu, deleteMenu } from './db.js'
-import { startBot } from './bot.js'
+import { startBot, getCurrentQR } from './bot.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = process.env.PORT || 3456
@@ -109,6 +109,13 @@ app.post('/api/upload/:id', requireAuth, upload.single('gambar'), (req, res) => 
   const updated = updateMenu(id, { gambar: imageUrl })
   if (!updated) return res.status(404).json({ error: 'Menu tidak ditemukan' })
   res.json({ message: 'Gambar berhasil diupload', url: imageUrl })
+})
+
+app.get('/api/qr', (req, res) => {
+  const qr = getCurrentQR()
+  if (!qr) return res.status(404).json({ error: 'Tidak ada QR code. Bot sudah login atau belum siap.' })
+  const qrUrl = `https://chart.googleapis.com/chart?cht=qr&chs=400x400&chl=${encodeURIComponent(qr)}`
+  res.redirect(qrUrl)
 })
 
 app.use((err, req, res, next) => {

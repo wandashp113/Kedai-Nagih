@@ -1,9 +1,9 @@
 import { makeWASocket, useMultiFileAuthState, DisconnectReason, downloadContentFromMessage } from '@whiskeysockets/baileys'
 import pino from 'pino'
+import qrcode from 'qrcode-terminal'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
-import readline from 'readline'
 import { initDb, getMenus, createMenu, updateMenu, deleteMenu } from './db.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -15,26 +15,15 @@ const BOT_PIN = process.env.BOT_PIN || null
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 
-function promptNomor() {
-  const isTTY = process.stdin.isTTY
-  if (!isTTY) {
-    console.error('❌ BOT_NOMOR belum di-set! Set environment variable BOT_NOMOR=628xxx di Railway.')
-    console.error('   Atau kalau lokal, jalankan dengan terminal interaktif.\n')
-    return null
-  }
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-  return new Promise(resolve => {
-    rl.question('📱 Masukkan nomor WhatsApp bot (contoh: 6281234567890): ', answer => {
-      rl.close()
-      resolve(answer.trim())
-    })
-  })
-}
-
 initDb()
 
 const pendingImage = {}
 const authenticatedSenders = {}
+let currentQR = null
+
+export function getCurrentQR() {
+  return currentQR
+}
 
 function formatMenuList(menus) {
   if (menus.length === 0) return '🍽️ *Belum ada menu.*'
@@ -111,40 +100,28 @@ async function startBot() {
     browser: ['Kedai Nagih Bot', 'Safari', '1.0'],
   })
 
-  let pairingCodeRequested = false
-
-  sock.ev.on('connection.update', async (update) => {
+  sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update
-
-    if (qr && !pairingCodeRequested) {
-      pairingCodeRequested = true
-      const nomor = process.env.BOT_NOMOR || (await promptNomor())
-      if (!nomor) return
-      try {
-        const code = await sock.requestPairingCode(nomor)
-        console.log('\n╔══════════════════════════════════╗')
-        console.log('║   MASUKKAN KODE INI KE WHATSAPP   ║')
-        console.log('╚══════════════════════════════════╝\n')
-        console.log(`   🔑 Kode: ${code.match(/.{1,4}/g)?.join('-') || code}`)
-        console.log('\n📱 Cara: Buka WhatsApp > 3 titik > Perangkat Tertaut >')
-        console.log('   > Tautkan Perangkat > Gunakan nomor telepon')
-        console.log('   > Masukkan kode di atas\n')
-        console.log(`   Nomor bot: ${nomor}\n`)
-      } catch (err) {
-        console.error('❌ Gagal request pairing code:', err.message)
-      }
+    if (qr) {
+      currentQR = qr
+      console.log('\n╔══════════════════════════════════╗')
+      console.log('║  SCAN QR CODE INI DENGAN WHATSAPP  ║')
+      console.log('╚══════════════════════════════════╝\n')
+      qrcode.generate(qr, { small: true })
+      console.log(`\n📱 Atau buka link berikut di HP:\n   ${BASE_URL}/api/qr\n`)
     }
-
     if (connection === 'close') {
       const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
       if (shouldReconnect) {
         console.log('🔌 Koneksi terputus, reconnect...')
         startBot()
       } else {
+        currentQR = null
         console.log('🚪 Bot telah logout. Hapus folder session/ untuk login ulang.')
       }
     }
     if (connection === 'open') {
+      currentQR = null
       console.log('✅ Bot WhatsApp Kedai Nagih siap!')
       console.log(`📱 Nomor bot: ${sock.user?.id?.split(':')[0] || 'unknown'}`)
       console.log('💬 Kirim "help" ke nomor ini untuk bantuan\n')
@@ -243,7 +220,6 @@ async function startBot() {
               reply = `❌ Menu ID ${id} tidak ditemukan.`
             } else {
               pendingImage[sender] = { menuId: id, nama: menu.nama }
-              // Auto-expire after 2 minutes
               setTimeout(() => { delete pendingImage[sender] }, 120000)
               reply = `📸 Kirim fotonya sekarang untuk *${menu.nama}*.\n(2 menit)`
             }
