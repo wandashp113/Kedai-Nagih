@@ -114,8 +114,35 @@ app.post('/api/upload/:id', requireAuth, upload.single('gambar'), (req, res) => 
 app.get('/api/qr', (req, res) => {
   const qr = getCurrentQR()
   if (!qr) return res.status(404).json({ error: 'Tidak ada QR code. Bot sudah login atau belum siap.' })
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qr)}`
-  res.redirect(qrUrl)
+  const data = JSON.stringify(qr)
+  res.send(`<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QR Code - Kedai Nagih</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#f5f5f5;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.card{background:#fff;border-radius:16px;padding:32px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1);max-width:90vw}
+h1{font-size:20px;margin-bottom:8px;color:#333}
+p{font-size:14px;color:#666;margin-bottom:24px}
+canvas{display:block;margin:16px auto;border-radius:8px}
+.footer{margin-top:24px;font-size:12px;color:#999}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>🔗 Scan QR Code</h1>
+<p>Scan dengan WhatsApp > 3 titik > Perangkat Tertaut</p>
+<canvas id="qr"></canvas>
+<p style="margin-top:16px;font-size:13px;color:#666">Atau buka WhatsApp > Link Device</p>
+<div class="footer">Kedai Nagih Bot</div>
+</div>
+<script>QRCode.toCanvas(document.getElementById('qr'),${data},{width:280},function(e){if(e)console.error(e)})</script>
+</body>
+</html>`)
 })
 
 app.use((err, req, res, next) => {
