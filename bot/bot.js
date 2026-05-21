@@ -7,8 +7,8 @@ import { fileURLToPath } from 'url'
 import { initDb, getMenus, createMenu, updateMenu, deleteMenu } from './db.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const SESSION_DIR = path.resolve(__dirname, 'session')
-const UPLOAD_DIR = path.resolve(__dirname, 'uploads')
+const SESSION_DIR = process.env.SESSION_DIR || path.resolve(__dirname, 'session')
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.resolve(__dirname, 'uploads')
 const PORT = process.env.PORT || 3456
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`
 const BOT_PIN = process.env.BOT_PIN || null
