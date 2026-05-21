@@ -1,5 +1,10 @@
 [phases]
-  setup = "npm install && cd v1-react && npm install && npx vite build"
+  setup = "npm install"
+  
+[phases.build]
+  dependsOn = ["setup"]
+  commands = ["cd v1-react && npm install && npx vite build"]
 
 [start]
   cmd = "node bot/api.js"
+  # Railway akan inject PORT otomatis
