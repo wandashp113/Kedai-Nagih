@@ -1,9 +1,9 @@
 import { makeWASocket, useMultiFileAuthState, DisconnectReason, downloadContentFromMessage } from '@whiskeysockets/baileys'
 import pino from 'pino'
-import qrcode from 'qrcode-terminal'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
+import readline from 'readline'
 import { initDb, getMenus, createMenu, updateMenu, deleteMenu } from './db.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -14,6 +14,16 @@ const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`
 const BOT_PIN = process.env.BOT_PIN || null
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+
+function promptNomor() {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+  return new Promise(resolve => {
+    rl.question('📱 Masukkan nomor WhatsApp bot (contoh: 6281234567890): ', answer => {
+      rl.close()
+      resolve(answer.trim())
+    })
+  })
+}
 
 initDb()
 
@@ -95,15 +105,29 @@ async function startBot() {
     browser: ['Kedai Nagih Bot', 'Safari', '1.0'],
   })
 
-  sock.ev.on('connection.update', (update) => {
+  let pairingCodeRequested = false
+
+  sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
-    if (qr) {
-      console.log('\n╔══════════════════════════════════╗')
-      console.log('║  SCAN QR CODE INI DENGAN WHATSAPP  ║')
-      console.log('╚══════════════════════════════════╝\n')
-      qrcode.generate(qr, { small: true })
-      console.log('\nAtau buka WhatsApp > 3 titik > Linked Devices > Link a Device')
+
+    if (qr && !pairingCodeRequested) {
+      pairingCodeRequested = true
+      const nomor = process.env.BOT_NOMOR || await promptNomor()
+      try {
+        const code = await sock.requestPairingCode(nomor)
+        console.log('\n╔══════════════════════════════════╗')
+        console.log('║   MASUKKAN KODE INI KE WHATSAPP   ║')
+        console.log('╚══════════════════════════════════╝\n')
+        console.log(`   🔑 Kode: ${code.match(/.{1,4}/g)?.join('-') || code}`)
+        console.log('\n📱 Cara: Buka WhatsApp > 3 titik > Perangkat Tertaut >')
+        console.log('   > Tautkan Perangkat > Gunakan nomor telepon')
+        console.log('   > Masukkan kode di atas\n')
+        console.log(`   Nomor bot: ${nomor}\n`)
+      } catch (err) {
+        console.error('❌ Gagal request pairing code:', err.message)
+      }
     }
+
     if (connection === 'close') {
       const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
       if (shouldReconnect) {
