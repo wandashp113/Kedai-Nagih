@@ -6,7 +6,10 @@ import { fileURLToPath } from 'url'
 import { initDb, getMenus, getMenu, createMenu, updateMenu, deleteMenu } from './db.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const UPLOAD_DIR = path.resolve(__dirname, 'uploads')
+const PORT = process.env.PORT || 3456
+const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.resolve(__dirname, 'uploads')
+const REACT_DIST = process.env.REACT_DIST || path.resolve(__dirname, '../v1-react/dist')
 
 const storage = multer.diskStorage({
   destination: UPLOAD_DIR,
@@ -27,8 +30,6 @@ const upload = multer({
 })
 
 const app = express()
-const PORT = 3456
-
 app.use(cors())
 app.use(express.json())
 app.use('/uploads', express.static(UPLOAD_DIR))
@@ -68,7 +69,7 @@ app.delete('/api/menu/:id', (req, res) => {
 app.post('/api/upload/:id', upload.single('gambar'), (req, res) => {
   const id = parseInt(req.params.id)
   if (!req.file) return res.status(400).json({ error: 'File tidak ditemukan' })
-  const imageUrl = `http://localhost:3456/uploads/${req.file.filename}`
+  const imageUrl = `${BASE_URL}/uploads/${req.file.filename}`
   const updated = updateMenu(id, { gambar: imageUrl })
   if (!updated) return res.status(404).json({ error: 'Menu tidak ditemukan' })
   res.json({ message: 'Gambar berhasil diupload', url: imageUrl })
@@ -82,9 +83,14 @@ app.use((err, req, res, next) => {
   next()
 })
 
+// Serve React build — SPA fallback
+app.use(express.static(REACT_DIST))
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) return next()
+  res.sendFile(path.join(REACT_DIST, 'index.html'))
+})
+
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🌐 API Server Kedai Nagih berjalan di http://localhost:${PORT}`)
-  console.log(`📋 GET  http://localhost:${PORT}/api/menu`)
-  console.log(`➕ POST http://localhost:${PORT}/api/menu`)
-  console.log(`🖼️  POST http://localhost:${PORT}/api/upload/:id`)
+  console.log(`🌐 Kedai Nagih berjalan di http://0.0.0.0:${PORT}`)
+  console.log(`📋 API: http://0.0.0.0:${PORT}/api/menu`)
 })

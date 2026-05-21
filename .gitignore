@@ -1,2 +1,5 @@
 *.zip
 *.tar.gz
+.env
+v1-react/dist/
+bot/uploads/*

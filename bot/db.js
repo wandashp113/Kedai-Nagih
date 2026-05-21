@@ -3,7 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DB_PATH = path.resolve(__dirname, 'shared.db')
+const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, 'shared.db')
 
 const FOOD_IMAGES = {
   'Nasi Goreng Mawut': 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400&h=300&fit=crop',
