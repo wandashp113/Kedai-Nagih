@@ -12,10 +12,21 @@ const FOOD_IMAGES = {
   'Es Jeruk': 'https://images.unsplash.com/photo-1621263764928-df1444c5e859?w=400&h=300&fit=crop',
 }
 
-export function getDb() {
-  const db = new Database(DB_PATH)
-  db.pragma('journal_mode = WAL')
-  return db
+let _db = null
+
+function getDb() {
+  if (!_db) {
+    _db = new Database(DB_PATH)
+    _db.pragma('journal_mode = WAL')
+  }
+  return _db
+}
+
+export function closeDb() {
+  if (_db) {
+    _db.close()
+    _db = null
+  }
 }
 
 export function initDb() {
@@ -46,29 +57,20 @@ export function initDb() {
     stmt.run('Es Teh Manis', 5000, 'Minuman', 'Gelas', FOOD_IMAGES['Es Teh Manis'])
     stmt.run('Es Jeruk', 6000, 'Minuman', 'Gelas', FOOD_IMAGES['Es Jeruk'])
   }
-  db.close()
 }
 
 export function getMenus() {
-  const db = getDb()
-  const rows = db.prepare('SELECT * FROM menus ORDER BY id ASC').all()
-  db.close()
-  return rows
+  return getDb().prepare('SELECT * FROM menus ORDER BY id ASC').all()
 }
 
 export function getMenu(id) {
-  const db = getDb()
-  const row = db.prepare('SELECT * FROM menus WHERE id = ?').get(id)
-  db.close()
-  return row
+  return getDb().prepare('SELECT * FROM menus WHERE id = ?').get(id)
 }
 
 export function createMenu(nama, harga, kategori = 'Makanan', porsi = '', gambar = '') {
-  const db = getDb()
-  const result = db.prepare(
+  const result = getDb().prepare(
     'INSERT INTO menus (nama, harga, kategori, tersedia, porsi, gambar) VALUES (?, ?, ?, 1, ?, ?)'
   ).run(nama, harga, kategori, porsi, gambar)
-  db.close()
   return result.lastInsertRowid
 }
 
@@ -82,17 +84,14 @@ export function updateMenu(id, data) {
       values.push(val)
     }
   }
-  if (fields.length === 0) { db.close(); return false }
+  if (fields.length === 0) return false
   fields.push("updated_at = datetime('now')")
   values.push(id)
   const result = db.prepare(`UPDATE menus SET ${fields.join(', ')} WHERE id = ?`).run(...values)
-  db.close()
   return result.changes > 0
 }
 
 export function deleteMenu(id) {
-  const db = getDb()
-  const result = db.prepare('DELETE FROM menus WHERE id = ?').run(id)
-  db.close()
+  const result = getDb().prepare('DELETE FROM menus WHERE id = ?').run(id)
   return result.changes > 0
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 
-const WA_NUMBER = import.meta.env.VITE_WA_NUMBER || '6282141071853'
+const WA_NUMBER = import.meta.env.VITE_WA_NUMBER || '6281234567890'
 const NAMA_TOKO = import.meta.env.VITE_NAMA_TOKO || 'Kedai Nagih'
 const TAGLINE = import.meta.env.VITE_TAGLINE || 'Makanan Enak, Bikin Nagih!'
 const ALAMAT = import.meta.env.VITE_ALAMAT || 'Jl. Merdeka No. 123, Jakarta'

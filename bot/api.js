@@ -35,7 +35,20 @@ app.use(cors())
 app.use(express.json())
 app.use('/uploads', express.static(UPLOAD_DIR))
 
+// API Key authentication
+const API_KEY = process.env.API_KEY || null
+function requireAuth(req, res, next) {
+  if (!API_KEY) return next()
+  const authHeader = req.headers.authorization
+  if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.slice(7) !== API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized. Gunakan header: Authorization: Bearer <API_KEY>' })
+  }
+  next()
+}
+
 initDb()
+
+const VALID_KATEGORI = ['Makanan', 'Minuman', 'Camilan', 'Lainnya']
 
 app.get('/api/menu', (req, res) => {
   res.json(getMenus())
@@ -47,27 +60,49 @@ app.get('/api/menu/:id', (req, res) => {
   res.json(menu)
 })
 
-app.post('/api/menu', (req, res) => {
+app.post('/api/menu', requireAuth, (req, res) => {
   const { nama, harga, kategori, porsi, gambar } = req.body
   if (!nama || !harga) return res.status(400).json({ error: 'Nama dan harga wajib diisi' })
-  const id = createMenu(nama, parseInt(harga), kategori || 'Makanan', porsi || '', gambar || '')
+  if (typeof nama !== 'string' || nama.length > 100) return res.status(400).json({ error: 'Nama harus string maks 100 karakter' })
+  const hargaNum = parseInt(harga)
+  if (isNaN(hargaNum) || hargaNum < 100 || hargaNum > 99999999) return res.status(400).json({ error: 'Harga harus antara 100 dan 99999999' })
+  const kat = kategori || 'Makanan'
+  if (!VALID_KATEGORI.includes(kat)) return res.status(400).json({ error: `Kategori harus: ${VALID_KATEGORI.join(', ')}` })
+  const id = createMenu(nama, hargaNum, kat, porsi || '', gambar || '')
   res.status(201).json({ id, message: 'Menu berhasil ditambahkan' })
 })
 
-app.put('/api/menu/:id', (req, res) => {
+app.put('/api/menu/:id', requireAuth, (req, res) => {
   const id = parseInt(req.params.id)
-  const updated = updateMenu(id, req.body)
+  const { nama, harga, kategori, porsi, tersedia } = req.body
+  const data = {}
+  if (nama !== undefined) {
+    if (typeof nama !== 'string' || nama.length > 100) return res.status(400).json({ error: 'Nama harus string maks 100 karakter' })
+    data.nama = nama
+  }
+  if (harga !== undefined) {
+    const hargaNum = parseInt(harga)
+    if (isNaN(hargaNum) || hargaNum < 100 || hargaNum > 99999999) return res.status(400).json({ error: 'Harga harus antara 100 dan 99999999' })
+    data.harga = hargaNum
+  }
+  if (kategori !== undefined) {
+    if (!VALID_KATEGORI.includes(kategori)) return res.status(400).json({ error: `Kategori harus: ${VALID_KATEGORI.join(', ')}` })
+    data.kategori = kategori
+  }
+  if (porsi !== undefined) data.porsi = String(porsi)
+  if (tersedia !== undefined) data.tersedia = tersedia ? 1 : 0
+  const updated = updateMenu(id, data)
   if (!updated) return res.status(404).json({ error: 'Menu tidak ditemukan' })
   res.json({ message: 'Menu berhasil diupdate' })
 })
 
-app.delete('/api/menu/:id', (req, res) => {
+app.delete('/api/menu/:id', requireAuth, (req, res) => {
   const deleted = deleteMenu(parseInt(req.params.id))
   if (!deleted) return res.status(404).json({ error: 'Menu tidak ditemukan' })
   res.json({ message: 'Menu berhasil dihapus' })
 })
 
-app.post('/api/upload/:id', upload.single('gambar'), (req, res) => {
+app.post('/api/upload/:id', requireAuth, upload.single('gambar'), (req, res) => {
   const id = parseInt(req.params.id)
   if (!req.file) return res.status(400).json({ error: 'File tidak ditemukan' })
   const imageUrl = `${BASE_URL}/uploads/${req.file.filename}`

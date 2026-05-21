@@ -9,12 +9,16 @@ import { initDb, getMenus, createMenu, updateMenu, deleteMenu } from './db.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SESSION_DIR = path.resolve(__dirname, 'session')
 const UPLOAD_DIR = path.resolve(__dirname, 'uploads')
+const PORT = process.env.PORT || 3456
+const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`
+const BOT_PIN = process.env.BOT_PIN || null
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 
 initDb()
 
 const pendingImage = {}
+const authenticatedSenders = {}
 
 function formatMenuList(menus) {
   if (menus.length === 0) return '🍽️ *Belum ada menu.*'
@@ -34,7 +38,8 @@ function formatMenuList(menus) {
 }
 
 function getHelp() {
-  return `🤖 *CARA PAKAI BOT KEDAI NAGIH*
+  const pinHelp = process.env.BOT_PIN ? '\n\n🔒 *Login*\n`auth [pin]` — login untuk akses admin' : ''
+  return `🤖 *CARA PAKAI BOT KEDAI NAGIH*${pinHelp}
 
 📋 *Lihat Menu*
 \`menu\` atau \`list\`
@@ -71,7 +76,7 @@ async function saveImage(msg, menuId) {
     const ext = msg.message.imageMessage.mimetype?.split('/')[1] || 'jpg'
     const filename = `menu_${menuId}_${Date.now()}.${ext}`
     fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer)
-    const imageUrl = `http://localhost:3456/uploads/${filename}`
+    const imageUrl = `${BASE_URL}/uploads/${filename}`
     updateMenu(menuId, { gambar: imageUrl })
     return imageUrl
   } catch (err) {
@@ -150,6 +155,25 @@ async function startBot() {
       const args = parts.slice(1)
       const raw = text.trim()
 
+      // PIN-based authentication
+      if (BOT_PIN && !authenticatedSenders[sender]) {
+        if (cmd === 'auth') {
+          const pin = args.join(' ')
+          if (pin === BOT_PIN) {
+            authenticatedSenders[sender] = true
+            setTimeout(() => { delete authenticatedSenders[sender] }, 86400000) // expire 24h
+            await sock.sendMessage(sender, { text: '✅ *Berhasil login!* Anda sekarang bisa menggunakan admin commands.' })
+          } else {
+            await sock.sendMessage(sender, { text: '❌ PIN salah. Silakan coba lagi.' })
+          }
+          continue
+        }
+        if (cmd !== 'menu' && cmd !== 'list' && cmd !== 'daftar' && cmd !== 'help' && cmd !== 'bantuan' && cmd !== '?') {
+          await sock.sendMessage(sender, { text: `🔒 Bot ini dilindungi PIN.\nKetik *auth <pin>* untuk login.\n\nHubungi pemilik untuk mendapatkan PIN.` })
+          continue
+        }
+      }
+
       try {
         let reply = ''
 
@@ -166,6 +190,12 @@ async function startBot() {
 
           if (!nama || isNaN(harga)) {
             reply = '❌ Format salah!\nGunakan:\n`tambah [nama] | [harga]`\nContoh: `tambah Nasi Goreng | 15000`'
+          } else if (nama.length > 100) {
+            reply = '❌ Nama menu terlalu panjang (maks 100 karakter).'
+          } else if (harga < 100 || harga > 99999999) {
+            reply = '❌ Harga harus antara Rp100 dan Rp99.999.999.'
+          } else if (!['Makanan', 'Minuman', 'Camilan', 'Lainnya'].includes(kategori)) {
+            reply = '❌ Kategori harus: Makanan, Minuman, Camilan, atau Lainnya.'
           } else {
             const id = createMenu(nama, harga, kategori, porsi)
             reply = `✅ *Menu berhasil ditambahkan!*\n   ID: ${id}\n   ${nama} - Rp${harga.toLocaleString()} (${kategori})${porsi ? `\n   Porsi: ${porsi}` : ''}\n\nKirim *gambar ${id}* untuk menambahkan foto.`
@@ -208,6 +238,21 @@ async function startBot() {
 
             if (!field || !value) {
               reply = '❌ Format salah! Gunakan: `edit [id] [field]:[value]`'
+            } else if (!['nama', 'harga', 'kategori', 'porsi', 'tersedia'].includes(field)) {
+              reply = '❌ Field tidak valid. Field yang bisa diedit: nama, harga, kategori, porsi, tersedia.'
+            } else if (field === 'nama' && value.length > 100) {
+              reply = '❌ Nama menu terlalu panjang (maks 100 karakter).'
+            } else if (field === 'harga') {
+              const hargaVal = parseInt(value)
+              if (isNaN(hargaVal) || hargaVal < 100 || hargaVal > 99999999) {
+                reply = '❌ Harga harus antara Rp100 dan Rp99.999.999.'
+              } else if (updateMenu(id, { harga: hargaVal })) {
+                reply = `✅ Menu ID ${id} berhasil diupdate!\n   harga → Rp${hargaVal.toLocaleString()}`
+              } else {
+                reply = `❌ Menu ID ${id} tidak ditemukan.`
+              }
+            } else if (field === 'kategori' && !['Makanan', 'Minuman', 'Camilan', 'Lainnya'].includes(value)) {
+              reply = '❌ Kategori harus: Makanan, Minuman, Camilan, atau Lainnya.'
             } else {
               const val = field === 'tersedia' ? (value === '1' || value === 'true' ? 1 : 0)
                 : field === 'harga' ? parseInt(value) : value
