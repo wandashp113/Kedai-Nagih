@@ -245,12 +245,16 @@ async function startBot() {
   })
 }
 
-console.log('╔══════════════════════════════════╗')
-console.log('║     🤖 KEDAI NAGIH WA BOT        ║')
-console.log('╚══════════════════════════════════╝')
-console.log('Memulai bot...\n')
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  console.log('╔══════════════════════════════════╗')
+  console.log('║     🤖 KEDAI NAGIH WA BOT        ║')
+  console.log('╚══════════════════════════════════╝')
+  console.log('Memulai bot...\n')
 
-startBot().catch(err => {
-  console.error('Fatal:', err)
-  process.exit(1)
-})
+  startBot().catch(err => {
+    console.error('Fatal:', err)
+    process.exit(1)
+  })
+}
+
+export { startBot }

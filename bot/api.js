@@ -4,6 +4,7 @@ import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { initDb, getMenus, getMenu, createMenu, updateMenu, deleteMenu } from './db.js'
+import { startBot } from './bot.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = process.env.PORT || 3456
@@ -93,4 +94,5 @@ app.use((req, res, next) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 Kedai Nagih berjalan di http://0.0.0.0:${PORT}`)
   console.log(`📋 API: http://0.0.0.0:${PORT}/api/menu`)
+  startBot().catch(err => console.error('Bot error:', err))
 })
