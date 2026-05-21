@@ -114,7 +114,7 @@ app.post('/api/upload/:id', requireAuth, upload.single('gambar'), (req, res) => 
 app.get('/api/qr', (req, res) => {
   const qr = getCurrentQR()
   if (!qr) return res.status(404).json({ error: 'Tidak ada QR code. Bot sudah login atau belum siap.' })
-  const qrUrl = `https://chart.googleapis.com/chart?cht=qr&chs=400x400&chl=${encodeURIComponent(qr)}`
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qr)}`
   res.redirect(qrUrl)
 })
 
