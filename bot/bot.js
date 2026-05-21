@@ -16,6 +16,12 @@ const BOT_PIN = process.env.BOT_PIN || null
 fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 
 function promptNomor() {
+  const isTTY = process.stdin.isTTY
+  if (!isTTY) {
+    console.error('❌ BOT_NOMOR belum di-set! Set environment variable BOT_NOMOR=628xxx di Railway.')
+    console.error('   Atau kalau lokal, jalankan dengan terminal interaktif.\n')
+    return null
+  }
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
   return new Promise(resolve => {
     rl.question('📱 Masukkan nomor WhatsApp bot (contoh: 6281234567890): ', answer => {
@@ -112,7 +118,8 @@ async function startBot() {
 
     if (qr && !pairingCodeRequested) {
       pairingCodeRequested = true
-      const nomor = process.env.BOT_NOMOR || await promptNomor()
+      const nomor = process.env.BOT_NOMOR || (await promptNomor())
+      if (!nomor) return
       try {
         const code = await sock.requestPairingCode(nomor)
         console.log('\n╔══════════════════════════════════╗')
