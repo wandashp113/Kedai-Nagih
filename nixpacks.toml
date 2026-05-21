@@ -1,6 +1,5 @@
 [phases]
-  install = "cd v1-react && npm install && cd ../bot && npm install"
-  setup = "npm run build"
+  setup = "npm install && cd v1-react && npm install && npx vite build"
 
 [start]
   cmd = "node bot/api.js"
