@@ -20,9 +20,32 @@ initDb()
 const pendingImage = {}
 const authenticatedSenders = {}
 let currentQR = null
+let botStatus = 'idle'
+let sock = null
 
 export function getCurrentQR() {
   return currentQR
+}
+
+export function getBotStatus() {
+  return botStatus
+}
+
+export function forceRelogin() {
+  if (sock) {
+    sock.end(undefined)
+    sock = null
+  }
+  currentQR = null
+  botStatus = 'idle'
+  const sessionPath = path.resolve(SESSION_DIR)
+  if (fs.existsSync(sessionPath)) {
+    fs.rmSync(sessionPath, { recursive: true, force: true })
+    console.log('🗑️ Session dihapus.')
+  }
+  setTimeout(() => {
+    startBot().catch(err => console.error('Bot restart error:', err))
+  }, 1000)
 }
 
 function formatMenuList(menus) {
@@ -93,7 +116,9 @@ async function saveImage(msg, menuId) {
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
 
-  const sock = makeWASocket({
+  botStatus = 'connecting'
+  currentQR = null
+  sock = makeWASocket({
     auth: state,
     printQRInTerminal: false,
     logger: pino({ level: 'silent' }),
@@ -104,6 +129,7 @@ async function startBot() {
     const { connection, lastDisconnect, qr } = update
     if (qr) {
       currentQR = qr
+      botStatus = 'qr'
       console.log('\n╔══════════════════════════════════╗')
       console.log('║  SCAN QR CODE INI DENGAN WHATSAPP  ║')
       console.log('╚══════════════════════════════════╝\n')
@@ -113,15 +139,18 @@ async function startBot() {
     if (connection === 'close') {
       const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
       if (shouldReconnect) {
+        botStatus = 'reconnecting'
         console.log('🔌 Koneksi terputus, reconnect...')
         startBot()
       } else {
         currentQR = null
+        botStatus = 'logged_out'
         console.log('🚪 Bot telah logout. Hapus folder session/ untuk login ulang.')
       }
     }
     if (connection === 'open') {
       currentQR = null
+      botStatus = 'connected'
       console.log('✅ Bot WhatsApp Kedai Nagih siap!')
       console.log(`📱 Nomor bot: ${sock.user?.id?.split(':')[0] || 'unknown'}`)
       console.log('💬 Kirim "help" ke nomor ini untuk bantuan\n')

@@ -4,7 +4,7 @@ import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { initDb, getMenus, getMenu, createMenu, updateMenu, deleteMenu } from './db.js'
-import { startBot, getCurrentQR } from './bot.js'
+import { startBot, getCurrentQR, getBotStatus, forceRelogin } from './bot.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = process.env.PORT || 3456
@@ -113,34 +113,78 @@ app.post('/api/upload/:id', requireAuth, upload.single('gambar'), (req, res) => 
 
 app.get('/api/qr', (req, res) => {
   const qr = getCurrentQR()
-  if (!qr) return res.status(404).json({ error: 'Tidak ada QR code. Bot sudah login atau belum siap.' })
-  const data = JSON.stringify(qr)
+  const status = getBotStatus()
+
+  const isForce = req.query.force === '1'
+  if (isForce && status === 'connected') {
+    forceRelogin()
+    return res.send(`<!DOCTYPE html>
+<html lang="id">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Logout - Kedai Nagih</title><meta http-equiv="refresh" content="5;url=/api/qr">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#f5f5f5;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.card{background:#fff;border-radius:16px;padding:32px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1);max-width:90vw}
+h1{font-size:20px;margin-bottom:8px;color:#333}
+p{font-size:14px;color:#666}
+</style>
+</head>
+<body><div class="card">
+<h1>🚪 Logout...</h1>
+<p>Session dihapus. Bot akan restart dan generate QR baru dalam 5 detik.</p>
+</div></body></html>`)
+  }
+
+  const hasQr = !!qr
+  const qrData = hasQr ? JSON.stringify(qr) : 'null'
+
   res.send(`<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>QR Code - Kedai Nagih</title>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+${!hasQr && status !== 'connected' ? '<meta http-equiv="refresh" content="5">' : ''}
+${hasQr ? '<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>' : ''}
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,sans-serif;background:#f5f5f5;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.card{background:#fff;border-radius:16px;padding:32px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1);max-width:90vw}
+body{font-family:-apple-system,sans-serif;background:#f5f5f5;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:16px}
+.card{background:#fff;border-radius:16px;padding:32px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1);max-width:90vw;width:400px}
 h1{font-size:20px;margin-bottom:8px;color:#333}
-p{font-size:14px;color:#666;margin-bottom:24px}
+p{font-size:14px;color:#666;margin-bottom:24px;line-height:1.6}
 canvas{display:block;margin:16px auto;border-radius:8px}
 .footer{margin-top:24px;font-size:12px;color:#999}
+.refresh-info{font-size:13px;color:#999;margin-top:16px}
+.btn{display:inline-block;margin-top:12px;padding:10px 20px;background:#ff3b30;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;text-decoration:none}
+.btn:hover{opacity:0.9}
+.btn-secondary{background:#1d1d1f;margin-left:8px}
 </style>
 </head>
 <body>
 <div class="card">
+${hasQr ? `
 <h1>🔗 Scan QR Code</h1>
 <p>Scan dengan WhatsApp > 3 titik > Perangkat Tertaut</p>
 <canvas id="qr"></canvas>
 <p style="margin-top:16px;font-size:13px;color:#666">Atau buka WhatsApp > Link Device</p>
+` : status === 'connected' ? `
+<h1>✅ Bot sudah Login</h1>
+<p>Bot WhatsApp sudah terhubung.<br>Silahkan kirim <strong>help</strong> ke nomor bot untuk mulai.</p>
+<a href="/api/qr?force=1" class="btn">🔄 Logout & QR Baru</a>
+` : status === 'connecting' ? `
+<h1>⏳ Menghubungkan...</h1>
+<p>Bot sedang mencoba koneksi ke WhatsApp.<br>Halaman ini akan refresh otomatis setiap 5 detik.</p>
+<div style="font-size:48px;margin:32px 0">⏳</div>
+<p class="refresh-info">Refresh otomatis...</p>
+` : `
+<h1>⏳ Menunggu QR Code...</h1>
+<p>Bot sedang menyiapkan QR Code untuk login WhatsApp.<br>Halaman ini akan refresh otomatis setiap 5 detik.</p>
+<div style="font-size:48px;margin:32px 0">⏳</div>
+<p class="refresh-info">Refresh otomatis...</p>
+`}
 <div class="footer">Kedai Nagih Bot</div>
 </div>
-<script>QRCode.toCanvas(document.getElementById('qr'),${data},{width:280},function(e){if(e)console.error(e)})</script>
+${hasQr ? `<script>QRCode.toCanvas(document.getElementById('qr'),${qrData},{width:280},function(e){if(e)console.error(e)})</script>` : ''}
 </body>
 </html>`)
 })
