@@ -5,6 +5,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { initDb, getMenus, getMenu, createMenu, updateMenu, deleteMenu } from './db.js'
 import { startBot, getCurrentQR, getBotStatus, forceRelogin } from './bot.js'
+import QRCode from 'qrcode'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = process.env.PORT || 3456
@@ -111,12 +112,22 @@ app.post('/api/upload/:id', requireAuth, upload.single('gambar'), (req, res) => 
   res.json({ message: 'Gambar berhasil diupload', url: imageUrl })
 })
 
-app.get('/api/qr', (req, res) => {
+app.get('/api/qr.png', async (req, res) => {
+  const qr = getCurrentQR()
+  if (!qr) return res.status(404).json({ error: 'Tidak ada QR code' })
+  try {
+    const png = await QRCode.toBuffer(qr, { width: 400, margin: 2 })
+    res.type('image/png').send(png)
+  } catch {
+    res.status(500).json({ error: 'Gagal generate QR' })
+  }
+})
+
+app.get('/api/qr', async (req, res) => {
   const qr = getCurrentQR()
   const status = getBotStatus()
 
-  const isForce = req.query.force === '1'
-  if (isForce && status === 'connected') {
+  if (req.query.force === '1') {
     forceRelogin()
     return res.send(`<!DOCTYPE html>
 <html lang="id">
@@ -135,8 +146,12 @@ p{font-size:14px;color:#666}
 </div></body></html>`)
   }
 
-  const hasQr = !!qr
-  const qrData = hasQr ? JSON.stringify(qr) : 'null'
+  let qrDataUrl = null
+  if (qr) {
+    try {
+      qrDataUrl = await QRCode.toDataURL(qr, { width: 280, margin: 2 })
+    } catch {}
+  }
 
   res.send(`<!DOCTYPE html>
 <html lang="id">
@@ -144,47 +159,48 @@ p{font-size:14px;color:#666}
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>QR Code - Kedai Nagih</title>
-${!hasQr && status !== 'connected' ? '<meta http-equiv="refresh" content="5">' : ''}
-${hasQr ? '<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>' : ''}
+${!qr && status !== 'connected' ? '<meta http-equiv="refresh" content="5">' : ''}
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,sans-serif;background:#f5f5f5;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:16px}
-.card{background:#fff;border-radius:16px;padding:32px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1);max-width:90vw;width:400px}
-h1{font-size:20px;margin-bottom:8px;color:#333}
-p{font-size:14px;color:#666;margin-bottom:24px;line-height:1.6}
-canvas{display:block;margin:16px auto;border-radius:8px}
-.footer{margin-top:24px;font-size:12px;color:#999}
-.refresh-info{font-size:13px;color:#999;margin-top:16px}
-.btn{display:inline-block;margin-top:12px;padding:10px 20px;background:#ff3b30;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;text-decoration:none}
+body{font-family:-apple-system,sans-serif;background:#f5f5f7;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:16px}
+.card{background:#fff;border-radius:16px;padding:28px 32px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.08);max-width:90vw;width:400px}
+h1{font-size:20px;margin:0 0 6px;color:#1d1d1f}
+p{font-size:14px;color:#86868b;margin:0 0 20px;line-height:1.6}
+img{display:block;margin:16px auto;border-radius:12px;max-width:100%;height:auto;image-rendering:pixelated}
+.footer{margin-top:20px;padding-top:16px;border-top:1px solid #f0f0f0;font-size:12px;color:#aeaeb2}
+.refresh-info{font-size:13px;color:#aeaeb2;margin-top:16px}
+.btn{display:inline-block;margin:16px 4px 0;padding:10px 22px;background:#ff3b30;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;font-family:inherit}
 .btn:hover{opacity:0.9}
-.btn-secondary{background:#1d1d1f;margin-left:8px}
+.btn-secondary{background:#1d1d1f}
+.spinner{font-size:48px;margin:24px 0 8px;animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
 </style>
 </head>
 <body>
 <div class="card">
-${hasQr ? `
+${qr && qrDataUrl ? `
 <h1>🔗 Scan QR Code</h1>
-<p>Scan dengan WhatsApp > 3 titik > Perangkat Tertaut</p>
-<canvas id="qr"></canvas>
-<p style="margin-top:16px;font-size:13px;color:#666">Atau buka WhatsApp > Link Device</p>
+<p>Scan dengan WhatsApp > <strong>3 titik</strong> > <strong>Perangkat Tertaut</strong></p>
+<img src="${qrDataUrl}" alt="QR Code" width="280" height="280">
+<p style="font-size:13px;margin-top:12px">Atau buka WhatsApp > Link Device</p>
 ` : status === 'connected' ? `
 <h1>✅ Bot sudah Login</h1>
-<p>Bot WhatsApp sudah terhubung.<br>Silahkan kirim <strong>help</strong> ke nomor bot untuk mulai.</p>
+<p>Bot WhatsApp sudah terhubung.<br>Silakan kirim <strong>help</strong> ke nomor bot.</p>
+<a href="/api/qr.png" class="btn btn-secondary" target="_blank">📷 QR PNG</a>
 <a href="/api/qr?force=1" class="btn">🔄 Logout & QR Baru</a>
 ` : status === 'connecting' ? `
 <h1>⏳ Menghubungkan...</h1>
-<p>Bot sedang mencoba koneksi ke WhatsApp.<br>Halaman ini akan refresh otomatis setiap 5 detik.</p>
-<div style="font-size:48px;margin:32px 0">⏳</div>
-<p class="refresh-info">Refresh otomatis...</p>
+<p>Bot sedang mencoba koneksi ke WhatsApp.</p>
+<div class="spinner">⏳</div>
+<p class="refresh-info">Halaman refresh otomatis...</p>
 ` : `
 <h1>⏳ Menunggu QR Code...</h1>
-<p>Bot sedang menyiapkan QR Code untuk login WhatsApp.<br>Halaman ini akan refresh otomatis setiap 5 detik.</p>
-<div style="font-size:48px;margin:32px 0">⏳</div>
-<p class="refresh-info">Refresh otomatis...</p>
+<p>Bot sedang menyiapkan QR Code untuk login WhatsApp.</p>
+<div class="spinner">⏳</div>
+<p class="refresh-info">Halaman refresh otomatis...</p>
 `}
 <div class="footer">Kedai Nagih Bot</div>
 </div>
-${hasQr ? `<script>QRCode.toCanvas(document.getElementById('qr'),${qrData},{width:280},function(e){if(e)console.error(e)})</script>` : ''}
 </body>
 </html>`)
 })

@@ -121,7 +121,7 @@ async function startBot() {
   sock = makeWASocket({
     auth: state,
     printQRInTerminal: false,
-    logger: pino({ level: 'silent' }),
+    logger: pino({ level: 'error' }),
     browser: ['Kedai Nagih Bot', 'Safari', '1.0'],
   })
 
